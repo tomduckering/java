@@ -54,6 +54,29 @@ def oracle_downloaded?(download_path, new_resource)
   end
 end
 
+def not_nil_or_empty(value)
+  return ! value.nil? && ! value.empty?
+end
+
+def get_proxy_settings(url)
+  require 'uri'
+  java_package_uri = URI(url)
+  proxy_command_option = ""
+  if java_package_uri.scheme == "http" && not_nil_or_empty(Chef::Config.http_proxy)
+    proxy_command_option = "--proxy #{Chef::Config.http_proxy}"
+    if not_nil_or_empty(Chef::Config.http_proxy_user) && not_nil_or_empty(Chef::Config.http_proxy_pass)
+      proxy_command_option << " --proxy-user #{Chef::Config.http_proxy_user}:#{Chef::Config.http_proxy_pass}"
+    end
+  end
+  if java_package_uri.scheme == "https" && not_nil_or_empty(Chef::Config.https_proxy)
+    proxy_command_option = "--proxy #{Chef::Config.https_proxy}"
+    if not_nil_or_empty(Chef::Config.https_proxy_user) && not_nil_or_empty(Chef::Config.https_proxy_pass)
+      proxy_command_option << " --proxy-user #{Chef::Config.https_proxy_user}:#{Chef::Config.https_proxy_pass}"
+    end
+  end
+  proxy_command_option
+end
+
 def download_direct_from_oracle(tarball_name, new_resource)
   download_path = "#{Chef::Config[:file_cache_path]}/#{tarball_name}"
   jdk_id = new_resource.url.scan(/\/([6789]u[0-9][0-9]?-b[0-9][0-9])\//)[0][0]
@@ -68,8 +91,9 @@ def download_direct_from_oracle(tarball_name, new_resource)
     description = "download oracle tarball straight from the server"
     converge_by(description) do
        Chef::Log.debug "downloading oracle tarball straight from the source"
+       proxy_command_option = get_proxy_settings(new_resource.url)
        cmd = shell_out!(
-                                  %Q[ curl -L --cookie "#{cookie}" #{new_resource.url} -o #{download_path} ]
+                                  %Q[ curl #{proxy_command_option} -L --cookie "#{cookie}" #{new_resource.url} -o #{download_path} ]
                                )
     end
   else
